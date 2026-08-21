@@ -77,15 +77,30 @@ curl "http://127.0.0.1:8080/v1/properties/dummy-001/export-for-cad"
 3. レスポンスに`is_dummy_data: true`を必ず含め、ダミーデータであることを
    明示する。
 
+## エラーレスポンス
+
+- 不正な`budget_max`(数値でない等)を渡した場合は`400 Bad Request`で
+  `{"error":"bad_request","field":"budget_max","message":"..."}`を返す
+  (以前は不正値を黙って無視して全件検索と同じ結果を返していたため、
+  ユーザーが入力ミスに気付けなかった問題を修正)。
+- 存在しない物件IDの場合の404レスポンスには、探したIDそのものを
+  `message`に含める(`no property with id 'xxx'`)。
+- 未定義ルートの404レスポンスには、利用可能なエンドポイント一覧を
+  `message`に含める。
+
 ## 検証結果
 
-- `cargo build --release` — 成功。
-- `cargo test --release` — `fudousan-core`の単体テスト6件、全て成功
-  (面積計算・エクスポート変換・ダミーデータの一意性等)。
+- `cargo build --release` — 成功(警告なし)。
+- `cargo test --release` — `fudousan-core`の単体テスト6件、
+  `fudousan-api`の単体テスト13件、全て成功(面積計算・エクスポート
+  変換・ダミーデータの一意性・APIルーティング/検索フィルタ/
+  エラーレスポンスの内容等)。`fudousan-api`側は元々テストゼロ
+  だったため、ルーティング処理を`route()`という同期の純粋関数へ
+  切り出し、実サーバーを起動せずに単体テスト可能にした。
 - 実サーバー起動 + `curl`/`Invoke-WebRequest`による実HTTP検証 — 4エンドポイント
   (`/healthz`, `/v1/properties/search`, `/v1/properties/:id`,
   `/v1/properties/:id/export-for-cad`)全てで期待通りのJSONレスポンスを
-  確認済み(存在しないIDへの404も確認済み)。
+  確認済み(存在しないIDへの404、不正な`budget_max`への400も確認済み)。
 
 ## 見送った部分
 
