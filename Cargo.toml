@@ -1,0 +1,13 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/fudousan-core",
+    "crates/fudousan-api",
+]
+
+[workspace.package]
+version    = "0.1.0"
+edition    = "2021"
+authors    = ["aon-co-jp"]
+license    = "MIT"
+repository = "https://github.com/aon-co-jp/open-fudousan"
