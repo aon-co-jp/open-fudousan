@@ -89,3 +89,31 @@ longitude (`LatLng`), the `export-for-cad` endpoint:
   no actual inter-process integration (e.g. calling open-cg-cad over HTTP)
   was performed. This repository is limited to implementing and unit-
   verifying the **data format** open-cg-cad requires.
+
+
+---
+
+## Update 2026-08-23 — CPU SIMD applicability review (conclusion: not applicable, no code changes)
+
+Alongside extending the shared
+[`open-cpu`](https://github.com/aon-co-jp/open-cpu) crate to handle
+combinations of CPU instruction sets, this repository was reviewed for
+anything worth accelerating. **Conclusion: there is nothing to accelerate.**
+
+Reasons, based on reading the actual code:
+
+- The repository is a property-search MVP: under 800 lines of Rust across
+  two crates, `fudousan-core` (data model and export) and `fudousan-api`
+  (HTTP directly on hyper). No database, no template engine.
+- Property data is **8 dummy records** in `dummy_data.rs`; search is a
+  substring match plus a budget comparison over those 8. Loop lengths are
+  in single digits.
+- The only floating-point work is `latlng_to_local_meters` in `export.rs`
+  (equirectangular lat/lng → metres), applied to a handful of site polygon
+  vertices — far below the point where SIMD setup cost pays for itself.
+- There is no image processing, hashing, or bulk aggregation of any kind.
+
+No `open-cpu` dependency was added. This is recorded explicitly so that a
+future session does not add speculative SIMD code with no measurable
+benefit. Revisit this section once the deferred `aruaru-db` persistence
+lands and record counts reach tens of thousands or more.
