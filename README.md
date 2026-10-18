@@ -41,8 +41,9 @@ cargo test --release
 
 ## API
 
-- `GET /v1/properties/search?area=<住所部分一致>&budget_max=<円>` —
-  ダミー物件の検索。
+- `GET /v1/properties/search?area=<住所部分一致>&budget_max=<円>&limit=<1〜200、既定50>&offset=<既定0>` —
+  ダミー物件の検索(ページネーション対応。`count`は条件に合う総件数、`returned`は今回返した件数)。
+  English: dummy-property search with `limit`/`offset` pagination (`count` = total matches).
 - `GET /v1/properties/:id` — 単一物件の詳細。
 - `GET /v1/properties/:id/export-for-cad` — open-cg-cad向けエクスポート
   (下記参照)。
@@ -112,3 +113,8 @@ curl "http://127.0.0.1:8080/v1/properties/dummy-001/export-for-cad"
   プロセス間連携(HTTP経由でのopen-cg-cad呼び出し等)は行っていない。
   本リポジトリはopen-cg-cadが要求する**データ形式**での出力実装・単体
   検証までにとどめている。
+
+
+## ライセンス / License
+
+MIT(`LICENSE`参照)。データは全てダミーで、実在の不動産情報ではありません。 / MIT (see `LICENSE`). All data is dummy data, not real estate listings.

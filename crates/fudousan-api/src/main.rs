@@ -4,12 +4,12 @@
 //! エコシステム方針に準拠、`open-raid-z/CLAUDE.md`参照)。
 //!
 //! # エンドポイント
-//! - `GET /v1/properties/search?area=<部分一致>&budget_max=<円>` — ダミー
+//! - `GET /v1/properties/search?area=<部分一致>&budget_max=<円>&limit=<1-200,既定50>&offset=<既定0>` — ダミー
 //!   物件の検索(全件`fudousan_core::dummy_data::sample_properties()`から)。
 //! - `GET /v1/properties/:id` — 単一物件の詳細。
 //! - `GET /v1/properties/:id/export-for-cad` — open-cg-cad向けエクスポート。
 //!
-//! **正直な開示**: 認証・ページネーション・実DB永続化は未実装(MVPの
+//! **正直な開示**: 認証・実DB永続化は未実装(ページネーションは`limit`/`offset`で対応済み)(MVPの
 //! スコープ外、`README.md`/`CLAUDE.md`のHANDOFF参照)。
 
 use std::convert::Infallible;
@@ -94,6 +94,20 @@ fn bad_request(field: &str, message: &str) -> Response<BoxBody> {
 /// メソッド・パス・クエリ文字列からルーティングを行い、レスポンスを組み立てる
 /// 同期の純粋関数。hyperの`Incoming`ボディに依存しないため、単体テストで
 /// 実際のHTTPサーバーを起動せずにルーティング・エラーハンドリングを検証できる。
+/// `limit`/`offset`等の非負整数クエリを読む。未指定・空文字は既定値、数値でなければ400。
+fn parse_usize_param(
+    params: &[(String, String)],
+    name: &str,
+    default: usize,
+) -> Result<usize, Response<BoxBody>> {
+    match params.iter().find(|(k, _)| k == name).map(|(_, v)| v.as_str()) {
+        None | Some("") => Ok(default),
+        Some(raw) => raw.parse::<usize>().map_err(|_| {
+            bad_request(name, &format!("{name} must be a non-negative integer, e.g. {name}=10"))
+        }),
+    }
+}
+
 fn route(method: &Method, path: &str, query: &str, state: &AppState) -> Response<BoxBody> {
     if method != Method::GET {
         return json_response(
@@ -130,7 +144,16 @@ fn route(method: &Method, path: &str, query: &str, state: &AppState) -> Response
                 },
             };
 
-            let results: Vec<&Property> = state
+            let limit = match parse_usize_param(&params, "limit", 50) {
+                Ok(v) => v.clamp(1, 200),
+                Err(r) => return r,
+            };
+            let offset = match parse_usize_param(&params, "offset", 0) {
+                Ok(v) => v,
+                Err(r) => return r,
+            };
+
+            let matched: Vec<&Property> = state
                 .properties
                 .iter()
                 .filter(|p| {
@@ -141,11 +164,15 @@ fn route(method: &Method, path: &str, query: &str, state: &AppState) -> Response
                 })
                 .filter(|p| budget_max.map(|max| p.estimated_price_jpy <= max).unwrap_or(true))
                 .collect();
+            let results: Vec<&Property> = matched.iter().skip(offset).take(limit).copied().collect();
 
             json_response(
                 StatusCode::OK,
                 &serde_json::json!({
-                    "count": results.len(),
+                    "count": matched.len(),
+                    "returned": results.len(),
+                    "limit": limit,
+                    "offset": offset,
                     "results": results,
                     "is_dummy_data": true,
                 }),
@@ -310,6 +337,29 @@ mod tests {
         let json = body_json(resp).await;
         assert_eq!(json["field"], "budget_max");
         assert!(json["message"].as_str().unwrap().contains("non-negative integer"));
+    }
+
+    #[tokio::test]
+    async fn search_paginates_with_limit_and_offset() {
+        let state = test_state();
+        let all = body_json(route(&Method::GET, "/v1/properties/search", "", &state)).await;
+        let total = all["count"].as_u64().unwrap();
+        assert!(total >= 2, "need at least 2 dummy properties");
+        let page = body_json(route(&Method::GET, "/v1/properties/search", "limit=1&offset=1", &state)).await;
+        assert_eq!(page["count"].as_u64().unwrap(), total);
+        assert_eq!(page["returned"], 1);
+        assert_eq!(page["limit"], 1);
+        assert_eq!(page["offset"], 1);
+        assert_eq!(page["results"][0]["id"], all["results"][1]["id"]);
+    }
+
+    #[tokio::test]
+    async fn search_with_invalid_limit_returns_400() {
+        let state = test_state();
+        let resp = route(&Method::GET, "/v1/properties/search", "limit=abc", &state);
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        let json = body_json(resp).await;
+        assert_eq!(json["field"], "limit");
     }
 
     #[tokio::test]
