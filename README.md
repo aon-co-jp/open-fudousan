@@ -1,3 +1,5 @@
+> Latest translations / 翻訳の最新版: [0-LATEST-TRANSLATIONS.md](0-LATEST-TRANSLATIONS.md)
+
 # open-fudousan
 
 土地・物件検索システム(Rust製、MVP)。**最大の目的は姉妹リポジトリ
